@@ -123,6 +123,9 @@
     heading.appendChild(sidebar);
 
     // --- Utility functions ---
+
+    let watchInterval = null;
+
     /**
      * Fetch availability for a given month and notify if slots open.
      * @param {number} month - Month index (1-12)
@@ -161,18 +164,13 @@
             })
             .catch(error => {
                 console.error("Error fetching data:", error);
+                showMessage("Error fetching data. Please reload the page.");
             });
     }
 
-    /**
-     * Send desktop notification of available dates.
-     * @param {number} month - Month index (1-12)
-     * @param {Array} availableDates
-     */
-    function sendNotification(month, availableDates) {
+    function showMessage(msg) {
         const message = document.createElement('div');
-        message.innerText = `Found available dates for ${months[month - 1]}!\n
-        Please refresh the page to see them.\n
+        message.innerText = `${msg}\n
         (Click to dismiss)`;
         Object.assign(message.style, {
             position: 'fixed',
@@ -192,9 +190,19 @@
         //     }
         // }, 5000); // Auto-remove after 5 seconds
         document.body.appendChild(message);
+    }
+
+    /**
+     * Send desktop notification of available dates.
+     * @param {number} month - Month index (1-12)
+     * @param {Array} availableDates
+     */
+    function sendNotification(month, availableDates) {
+        const msg = `Found available dates for ${months[month - 1]}!\n
+        Please refresh the page to see them.`;
+        showMessage(msg);
 
         if (Notification.permission === "granted") {
-            // const dates = availableDates.map(d => d.DateLibere).join(", ");
             const firstDate = new Date(availableDates[0].DateLibere).toLocaleDateString();
             new Notification("VISA Appointment Available for " + months[month - 1], {
                 body: `First available date: ${firstDate}`,
@@ -207,6 +215,14 @@
                 }
             });
         }
+    }
+
+    function keepSessionAlive() {
+        fetch(window.location.href, {
+            method: 'GET',
+            credentials: 'include'
+        })
+            .catch(err => console.warn('Keep‑alive fails', err));
     }
 
     function anyChecked() {
@@ -232,7 +248,6 @@
         btn.disabled = !anyChecked();
     });
 
-    let watchInterval = null;
     // Start/stop watching
     function stopWatching() {
         // Stop polling
@@ -241,26 +256,28 @@
         // Hide indicator
         indicator.style.display = 'none';
         btn.textContent = 'Start Watching';
+        btn.style.backgroundColor = '';
     }
 
     btn.addEventListener('click', () => {
-        const watching = watchInterval !== null;
 
-        if (watching) {
+        if (watchInterval == null) {
             // Request notification permission if needed
             if (Notification.permission !== 'granted') {
                 Notification.requestPermission();
             }
             // Show indicator
             indicator.style.display = 'block';
-            btn.textContent = 'Start Watching';
+            btn.textContent = 'Stop Watching';
+            btn.style.backgroundColor = '#ff8f6b';
 
             // Run immediately
             check(getSelectedMonths());
             // Schedule every 5 minutes
             watchInterval = setInterval(() => {
+                keepSessionAlive();
                 check(getSelectedMonths());
-            }, 3 * 60 * 1000);
+            }, 5 * 60 * 1000);
         } else {
             // Stop polling
             stopWatching();
